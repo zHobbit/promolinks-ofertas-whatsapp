@@ -27,7 +27,7 @@ try {
   if (m) csrf = m[1];
 } catch(e){}
 if (!csrf) {
-  await alerta('⚠️ PROMOLINKS: a SESSÃO do Mercado Livre expirou (sem CSRF). Recapture os cookies do Linkbuilder e atualize ML_AFF_COOKIE no .env, depois rode "docker compose up -d".');
+  await alerta('PROMOLINKS: a SESSÃO do Mercado Livre expirou (sem CSRF). Recapture os cookies do Linkbuilder e atualize ML_AFF_COOKIE no .env, depois rode "docker compose up -d".');
   return [];
 }
 
@@ -56,6 +56,6 @@ for (const item of items) {
 
 // Alerta SÓ quando TUDO falhou (= problema real, não 1 item esporádico)
 if (total >= 8 && out.length === 0) {
-  await alerta('🚨 PROMOLINKS: TODOS os ' + total + ' links de afiliado falharam. Provável sessão/cookie expirado — recapture o cURL do Linkbuilder e atualize ML_AFF_COOKIE no .env.');
+  await alerta('PROMOLINKS: TODOS os ' + total + ' links de afiliado falharam. Provável sessão/cookie expirado — recapture o cURL do Linkbuilder e atualize ML_AFF_COOKIE no .env.');
 }
 return out;

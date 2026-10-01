@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="940" height="1158" viewBox="0 0 940 1158" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="hd" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#E8843C"/>
+      <stop offset="1" stop-color="#E5125B"/>
+    </linearGradient>
+  </defs>
+  <rect width="940" height="1158" fill="#F7F8FA"/>
+
+  <!-- header -->
+  <rect width="940" height="120" fill="url(#hd)"/>
+  <text x="470" y="54" text-anchor="middle" font-size="42" font-weight="700" fill="#FFFFFF">PROMOLINKS</text>
+  <text x="470" y="92" text-anchor="middle" font-size="20" fill="#FFFFFF">Fluxo da automacao  -  Mercado Livre para WhatsApp</text>
+
+  <!-- 1 -->
+  <rect x="90" y="142" width="760" height="90" rx="14" fill="#FFFFFF" stroke="#1C3050" stroke-width="3"/>
+  <rect x="92" y="150" width="10" height="74" rx="5" fill="#E8843C"/>
+  <text x="128" y="186" font-size="24" font-weight="700" fill="#1C3050">Schedule Trigger</text>
+  <text x="128" y="214" font-size="16" fill="#6E7682">dispara a cada 30 minutos</text>
+  <text x="812" y="200" text-anchor="middle" font-size="30" font-weight="700" fill="#D2D7DE">1</text>
+  <line x1="470" y1="236" x2="470" y2="266" stroke="#1C3050" stroke-width="4"/>
+  <polygon points="461,262 479,262 470,274" fill="#1C3050"/>
+
+  <!-- 2 -->
+  <rect x="90" y="270" width="760" height="90" rx="14" fill="#FFFFFF" stroke="#1C3050" stroke-width="3"/>
+  <rect x="92" y="278" width="10" height="74" rx="5" fill="#2DA596"/>
+  <text x="128" y="314" font-size="24" font-weight="700" fill="#1C3050">Deteccao (Mercado Livre)</text>
+  <text x="128" y="342" font-size="16" fill="#6E7682">cursor rotativo pelo catalogo - maiores ofertas por nicho</text>
+  <text x="812" y="328" text-anchor="middle" font-size="30" font-weight="700" fill="#D2D7DE">2</text>
+  <line x1="470" y1="364" x2="470" y2="394" stroke="#1C3050" stroke-width="4"/>
+  <polygon points="461,390 479,390 470,402" fill="#1C3050"/>
+
+  <!-- 3 -->
+  <rect x="90" y="398" width="760" height="90" rx="14" fill="#FFFFFF" stroke="#1C3050" stroke-width="3"/>
+  <rect x="92" y="406" width="10" height="74" rx="5" fill="#1C3050"/>
+  <text x="128" y="442" font-size="24" font-weight="700" fill="#1C3050">Preparar dedup</text>
+  <text x="128" y="470" font-size="16" fill="#6E7682">junta as ofertas num unico payload JSON</text>
+  <text x="812" y="456" text-anchor="middle" font-size="30" font-weight="700" fill="#D2D7DE">3</text>
+  <line x1="470" y1="492" x2="470" y2="522" stroke="#1C3050" stroke-width="4"/>
+  <polygon points="461,518 479,518 470,530" fill="#1C3050"/>
+
+  <!-- 4 -->
+  <rect x="90" y="526" width="760" height="90" rx="14" fill="#FFFFFF" stroke="#1C3050" stroke-width="3"/>
+  <rect x="92" y="534" width="10" height="74" rx="5" fill="#E5125B"/>
+  <text x="128" y="570" font-size="24" font-weight="700" fill="#1C3050">Dedup (Postgres)</text>
+  <text x="128" y="598" font-size="16" fill="#6E7682">INSERT ON CONFLICT - nunca repete (hash fonte:id:nicho)</text>
+  <text x="812" y="584" text-anchor="middle" font-size="30" font-weight="700" fill="#D2D7DE">4</text>
+  <line x1="470" y1="620" x2="470" y2="650" stroke="#1C3050" stroke-width="4"/>
+  <polygon points="461,646 479,646 470,658" fill="#1C3050"/>
+
+  <!-- 5 -->
+  <rect x="90" y="654" width="760" height="90" rx="14" fill="#FFFFFF" stroke="#1C3050" stroke-width="3"/>
+  <rect x="92" y="662" width="10" height="74" rx="5" fill="#1C3050"/>
+  <text x="128" y="698" font-size="24" font-weight="700" fill="#1C3050">Restaurar</text>
+  <text x="128" y="726" font-size="16" fill="#6E7682">desembrulha e anexa o grupo de destino (do banco)</text>
+  <text x="812" y="712" text-anchor="middle" font-size="30" font-weight="700" fill="#D2D7DE">5</text>
+  <line x1="470" y1="748" x2="470" y2="778" stroke="#1C3050" stroke-width="4"/>
+  <polygon points="461,774 479,774 470,786" fill="#1C3050"/>
+
+  <!-- 6 -->
+  <rect x="90" y="782" width="760" height="90" rx="14" fill="#FFFFFF" stroke="#1C3050" stroke-width="3"/>
+  <rect x="92" y="790" width="10" height="74" rx="5" fill="#2DA596"/>
+  <text x="128" y="818" font-size="24" font-weight="700" fill="#1C3050">Gerar link de afiliado</text>
+  <text x="128" y="846" font-size="16" fill="#6E7682">cria o link meli.la - renova o CSRF sozinho</text>
+  <text x="812" y="832" text-anchor="middle" font-size="30" font-weight="700" fill="#D2D7DE">6</text>
+  <line x1="470" y1="872" x2="470" y2="902" stroke="#1C3050" stroke-width="4"/>
+  <polygon points="461,898 479,898 470,910" fill="#1C3050"/>
+
+  <!-- 7 -->
+  <rect x="90" y="910" width="760" height="90" rx="14" fill="#FFFFFF" stroke="#1C3050" stroke-width="3"/>
+  <rect x="92" y="918" width="10" height="74" rx="5" fill="#E8843C"/>
+  <text x="128" y="946" font-size="24" font-weight="700" fill="#1C3050">Montar mensagem</text>
+  <text x="128" y="974" font-size="16" fill="#6E7682">legenda formatada + imagem + grupo</text>
+  <text x="812" y="960" text-anchor="middle" font-size="30" font-weight="700" fill="#D2D7DE">7</text>
+  <line x1="470" y1="1000" x2="470" y2="1030" stroke="#1C3050" stroke-width="4"/>
+  <polygon points="461,1026 479,1026 470,1038" fill="#1C3050"/>
+
+  <!-- 8 -->
+  <rect x="90" y="1038" width="760" height="90" rx="14" fill="#FFFFFF" stroke="#1C3050" stroke-width="3"/>
+  <rect x="92" y="1046" width="10" height="74" rx="5" fill="#25D366"/>
+  <text x="128" y="1074" font-size="24" font-weight="700" fill="#1C3050">Enviar WhatsApp</text>
+  <text x="128" y="1102" font-size="16" fill="#6E7682">Evolution API - throttle 30s - grupos por nicho</text>
+  <text x="812" y="1088" text-anchor="middle" font-size="30" font-weight="700" fill="#D2D7DE">8</text>
+</svg>

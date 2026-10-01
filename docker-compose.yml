@@ -1,0 +1,125 @@
+# ==========================================================
+#  Infra da automação de descontos -> Telegram/WhatsApp
+#  Fase 1: n8n + Postgres
+#  Fase 2: Evolution API (WhatsApp) -> seção comentada no fim
+#  Subir:   docker compose up -d
+#  Logs:    docker compose logs -f n8n
+#  Parar:   docker compose down   (dados ficam nos volumes)
+# ==========================================================
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ofertas-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Scripts em ./db/init rodam SOMENTE na primeira criação do banco
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      # Exposto em localhost pra você inspecionar com DBeaver/pgAdmin se quiser
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: ofertas-n8n
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # n8n guarda seus próprios dados no Postgres, no schema "n8n"
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_POSTGRESDB_SCHEMA: n8n
+      # Autenticação básica da UI
+      N8N_BASIC_AUTH_ACTIVE: "true"
+      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      # Config geral
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE}
+      TZ: ${GENERIC_TIMEZONE}
+      N8N_HOST: ${N8N_HOST}
+      N8N_PORT: ${N8N_PORT}
+      N8N_PROTOCOL: ${N8N_PROTOCOL}
+      N8N_RUNNERS_ENABLED: "true"
+      # Permite usar os secrets do .env dentro de Function nodes via $env (opcional)
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      # --- Credenciais usadas pelos workflows (Code nodes via $env) ---
+      ML_CLIENT_ID: ${ML_CLIENT_ID}
+      ML_CLIENT_SECRET: ${ML_CLIENT_SECRET}
+      ML_USER_ID: ${ML_USER_ID}
+      ML_ACCESS_TOKEN: ${ML_ACCESS_TOKEN}
+      ML_REFRESH_TOKEN: ${ML_REFRESH_TOKEN}
+      ML_AFF_TAG: ${ML_AFF_TAG}
+      ML_AFF_CSRF: ${ML_AFF_CSRF}
+      ML_AFF_COOKIE: ${ML_AFF_COOKIE}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      # Pasta compartilhada caso precise ler/gravar arquivos locais a partir do n8n
+      - ./n8n-files:/files
+
+  # ---------------------------------------------------------------
+  #  FASE 2 — WhatsApp via Evolution API
+  # ---------------------------------------------------------------
+  evolution-api:
+    image: evoapicloud/evolution-api:v2.3.7
+    container_name: ofertas-evolution
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SERVER_URL: http://localhost:8080
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY}
+      AUTHENTICATION_TYPE: apikey
+      # Banco (reaproveita o Postgres, schema evolution)
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=evolution
+      DATABASE_CONNECTION_CLIENT_NAME: evolution
+      DATABASE_SAVE_DATA_INSTANCE: "true"
+      DATABASE_SAVE_DATA_NEW_MESSAGE: "false"
+      DATABASE_SAVE_MESSAGE_UPDATE: "false"
+      DATABASE_SAVE_DATA_CONTACTS: "false"
+      DATABASE_SAVE_DATA_CHATS: "false"
+      DATABASE_SAVE_DATA_LABELS: "false"
+      DATABASE_SAVE_DATA_HISTORIC: "false"
+      # Cache local (sem Redis)
+      CACHE_REDIS_ENABLED: "false"
+      CACHE_LOCAL_ENABLED: "true"
+      # Comportamento
+      DEL_INSTANCE: "false"
+      QRCODE_LIMIT: "60"
+      # Versão do WhatsApp Web (corrige handshake/timeout do Baileys)
+      CONFIG_SESSION_PHONE_VERSION: "2.3000.1035194821"
+      CONFIG_SESSION_PHONE_CLIENT: PROMOLINKS
+      CONFIG_SESSION_PHONE_NAME: Chrome
+      LOG_LEVEL: ERROR
+      LOG_BAILEYS: error
+    ports:
+      - "8080:8080"
+    volumes:
+      - evolution_instances:/evolution/instances
+
+volumes:
+  postgres_data:
+  n8n_data:
+  evolution_instances:

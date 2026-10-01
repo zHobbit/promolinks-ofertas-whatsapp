@@ -1,0 +1,25 @@
+# ===== SEGREDOS — NUNCA versionar =====
+.env
+.mcp.json
+
+# links de convite dos grupos
+links-grupos.txt
+
+# QR da sessão do WhatsApp
+qr-whatsapp.png
+**/qr-whatsapp.png
+
+# dumps base64
+*.b64
+
+# Pasta de trabalho/rascunho (scripts exploratórios, QR, imagens temporárias)
+n8n-files/
+n8n-files;C/
+
+# Claude Code
+.claude/
+
+# Sistema
+Thumbs.db
+.DS_Store
+desktop.ini

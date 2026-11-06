@@ -1,194 +1,192 @@
-# A Jornada — do zero a um sistema de ofertas no ar
+# The Journey: from zero to a live deals system
 
-Este documento conta a construção do PROMOLINKS **passo a passo**, com os problemas reais
-que apareceram e como cada um foi resolvido. É mais um diário de bordo do que um manual —
-a ideia é que os perrengues (e as soluções) fiquem registrados.
+This document tells how PROMOLINKS was built **step by step**, with the real problems that came up and how each one was solved. It is more of a logbook than a manual: the idea is to keep the roadblocks (and the fixes) on record.
 
 ---
 
-## 1. Planejamento
+## 1. Planning
 
-Decisões que guiaram tudo:
-- **Low-code (n8n)** self-hosted via **Docker**, rodando no PC.
-- **Postgres** junto do n8n (dedup + roteamento).
-- **Telegram primeiro** (sem risco de ban) para validar o fluxo; **WhatsApp depois**.
-- **Começar só com Mercado Livre**; critério de desconto evoluindo (de % fixo até priorizar as maiores).
-- Nichos segmentados, um grupo/canal por nicho.
+Decisions that guided everything:
+- **Low-code (n8n)**, self-hosted with **Docker**, running on my PC.
+- **Postgres** next to n8n (dedup + routing).
+- **Telegram first** (no ban risk) to validate the flow; **WhatsApp later**.
+- **Start with Mercado Livre only**; the discount criteria evolved from a fixed percentage to prioritizing the biggest discounts.
+- Niche segmentation, one group or channel per niche.
 
-**Aprendizado:** validar o fluxo na plataforma mais "barata" (Telegram) antes de encarar a arriscada (WhatsApp) economizou muita dor.
-
----
-
-## 2. A batalha da infraestrutura (a mais longa!)
-
-Instalar o Docker no Windows virou uma saga de camadas:
-
-1. **Docker não instalado** → baixar Docker Desktop.
-2. **WSL2 não instalado** → `wsl --install` (precisa admin + reboot).
-3. **"Virtualization not detected"** → faltava a *Plataforma de Máquina Virtual* + `hypervisorlaunchtype auto` (bcdedit) + reboot.
-4. **Ainda não subia** → o **Event Log (ID 44)** revelou a causa raiz: **"recurso Sem Execução (NX) não está habilitado no BIOS"**. O NX (Execute Disable) estava desligado na BIOS (CPU AMD Ryzen). Ativar na BIOS → hypervisor subiu.
-5. **Engine travado / "Inference manager"** → sockets órfãos na pasta `Docker/run` + recurso de IA; limpamos e desativamos.
-6. **Distro `docker-desktop` não registrava** → limpamos a distro antiga; com o hypervisor OK, registrou.
-
-**Aprendizados:**
-- No Windows, Docker = WSL2 = **hypervisor** = precisa de **virtualização E NX** habilitados na BIOS.
-- O **Visualizador de Eventos do Windows** (Event ID 44) é ouro para diagnosticar falha de hypervisor.
-- Diagnosticar com dados (`HyperVisorPresent`, `bcdedit`, event log) >>> tentar no chute.
+**Lesson:** validating the flow on the "cheap" platform (Telegram) before tackling the risky one (WhatsApp) saved a lot of pain.
 
 ---
 
-## 3. Telegram (a fase de validação)
+## 2. The infrastructure battle (the longest one!)
 
-- Bot criado no **@BotFather**; `chat_id` de cada canal descoberto via `getUpdates` (postando uma msg).
-- Primeiro envio formatado (HTML) funcionou.
-- **Perrengue:** no Windows, `curl -d` com emoji quebrava ("must be encoded in UTF-8"). Solução: salvar o JSON num arquivo UTF-8 e usar `--data-binary @arquivo`.
+Installing Docker on Windows turned into a saga of layers:
 
-**Aprendizado:** o shell do Windows + emojis + curl não se dão bem; arquivo UTF-8 resolve.
+1. **Docker not installed** → download Docker Desktop.
+2. **WSL2 not installed** → `wsl --install` (needs admin + reboot).
+3. **"Virtualization not detected"** → the *Virtual Machine Platform* feature was missing, plus `hypervisorlaunchtype auto` (bcdedit) + reboot.
+4. **Still would not start** → the **Event Log (ID 44)** revealed the root cause: **"No Execute (NX) is not enabled in the BIOS"**. NX (Execute Disable) was turned off in the BIOS (AMD Ryzen CPU). Enabling it brought the hypervisor up.
+5. **Engine stuck / "Inference manager"** → orphaned sockets in the `Docker/run` folder plus the AI feature; cleaned them up and disabled it.
+6. **The `docker-desktop` distro would not register** → removed the old distro; with the hypervisor working, it registered.
 
----
-
-## 4. API do Mercado Livre
-
-Descobertas importantes (testando endpoint por endpoint):
-- **`/sites/MLB/search` está BLOQUEADO (403)** desde 2024 — nada de busca.
-- **Funcionam:** `/highlights/MLB/category/{id}` (mais vendidos por categoria), `/products/{id}` (nome/imagem), `/products/{id}/items` (preço, `original_price`, frete), `/categories/{id}` (subcategorias).
-- **OAuth exige PKCE** (`code_challenge`/`code_verifier`) — sem isso dá `code_verifier is a required parameter`.
-- **Redirect localhost é rejeitado** no OAuth → usamos `https://httpbin.org/anything` (ecoa o `code` na tela).
-- O **token expira em 6h**, mas o `refresh_token` renova sozinho (o fluxo faz isso a cada run).
-
-**Perrengue clássico:** o `$env` do n8n vinha **vazio** — as variáveis `ML_*` precisavam estar no bloco `environment` do serviço n8n no `docker-compose.yml`, **não só no `.env`**.
+**Lessons:**
+- On Windows, Docker = WSL2 = **hypervisor** = you need **virtualization AND NX** enabled in the BIOS.
+- The **Windows Event Viewer** (Event ID 44) is gold for diagnosing hypervisor failures.
+- Diagnosing with data (`HyperVisorPresent`, `bcdedit`, event log) >>> guessing.
 
 ---
 
-## 5. Link de afiliado do Mercado Livre (sem API oficial)
+## 3. Telegram (the validation phase)
 
-- **Não existe API pública** de geração de link de afiliado.
-- Solução: replicar o **endpoint interno** do painel Linkbuilder
-  (`POST /affiliate-program/api/v2/affiliates/createLink`), usando **cookies de sessão + CSRF**
-  capturados via DevTools ("Copy as cURL").
-- **Evolução importante:** em vez de fixar o CSRF (que rotaciona rápido e derrubava tudo),
-  o fluxo passou a **buscar o CSRF fresco** da página do Linkbuilder a cada execução
-  (o cookie `ssid` dura bem mais). Só precisa recapturar o cookie de tempos em tempos —
-  e o fluxo **avisa no WhatsApp** quando isso acontece.
+- Bot created with **@BotFather**; each channel's `chat_id` found via `getUpdates` (after posting a message).
+- The first formatted (HTML) message worked.
+- **Roadblock:** on Windows, `curl -d` with emoji broke ("must be encoded in UTF-8"). Fix: save the JSON to a UTF-8 file and use `--data-binary @file`.
 
-**Aprendizado:** quando não há API, o endpoint interno + cookies funciona, mas é frágil;
-isolar a parte que expira (CSRF) e renovar automaticamente deixa muito mais robusto.
+**Lesson:** the Windows shell, emoji and curl do not get along; a UTF-8 file solves it.
 
 ---
 
-## 6. WhatsApp via Evolution API (o segundo boss)
+## 4. The Mercado Livre API
 
-- **QR "invisível":** configuramos `QRCODE_COLOR` preto num fundo escuro → QR sumia. (Também: o QR não vem pela REST, só pelo painel/websocket.)
-- **Handshake "Timed Out" / QR não gerava:** versão do WhatsApp Web desatualizada no Baileys.
-  Fix: `CONFIG_SESSION_PHONE_VERSION` com a versão atual (pegável do repositório do Baileys).
-- **"SessionError: No sessions" ao enviar pra GRUPO:** bug do novo esquema **LID** do WhatsApp
-  na imagem `atendai/evolution-api:2.2.3`. **Fix: trocar para `evoapicloud/evolution-api:v2.3.7`**
-  (reconectou sem re-scan e resolveu). Envio 1:1 funcionava; só grupo falhava.
+Important findings (testing endpoint by endpoint):
+- **`/sites/MLB/search` has been BLOCKED (403)** since 2024, so no search.
+- **What works:** `/highlights/MLB/category/{id}` (best sellers per category), `/products/{id}` (name/image), `/products/{id}/items` (price, `original_price`, shipping), `/categories/{id}` (subcategories).
+- **OAuth requires PKCE** (`code_challenge`/`code_verifier`); without it you get `code_verifier is a required parameter`.
+- **A localhost redirect is rejected** by OAuth → I used `https://httpbin.org/anything` (it echoes the `code` on screen).
+- The **token expires in 6h**, but the `refresh_token` renews it automatically (the flow does this on every run).
 
-**Aprendizado:** WhatsApp não-oficial (Baileys) é sensível a versão. Quando "quase tudo funciona
-menos grupo", suspeite de **versão da imagem/protocolo (LID)**.
-
----
-
-## 7. Dedup — de frágil a robusto
-
-- Primeira versão usava `staticData` do n8n. Problema: **execução manual não persiste** o staticData,
-  então em testes as ofertas se repetiam.
-- Solução: **dedup no Postgres** (`INSERT ... ON CONFLICT (hash_dedup) DO NOTHING RETURNING`),
-  que é atômico e persiste sempre. Hash = `fonte:id:nicho`.
-
-**Aprendizado:** estado que precisa sobreviver entre execuções deve ir pro **banco**, não pro staticData.
+**Classic roadblock:** n8n's `$env` was **empty**. The `ML_*` variables had to be in the `environment` block of the n8n service in `docker-compose.yml`, **not only in `.env`**.
 
 ---
 
-## 8. Volume e o cursor rotativo (o insight-chave)
+## 5. Mercado Livre affiliate links (no official API)
 
-- Sintoma: "poucas ofertas novas". Causa: o `highlights` devolve sempre os **mesmos ~20 mais vendidos**
-  por categoria (é capado em ~20, ignora `limit` maior). Toda run começava do mesmo ponto → dedup barrava tudo.
-- Solução: **cursor rotativo** — mapear TODAS as subcategorias (cacheado), e a cada run varrer uma
-  **janela** diferente, avançando um cursor. Assim o catálogo inteiro é explorado ao longo do tempo.
+- **There is no public API** for generating affiliate links.
+- Solution: replicate the **internal endpoint** of the Linkbuilder panel
+  (`POST /affiliate-program/api/v2/affiliates/createLink`), using **session cookies + CSRF**
+  captured from DevTools ("Copy as cURL").
+- **Key improvement:** instead of hard-coding the CSRF token (it rotates fast and broke everything),
+  the flow now **fetches a fresh CSRF token** from the Linkbuilder page on every run
+  (the `ssid` cookie lasts much longer). The cookie only needs to be captured again from time to time,
+  and the flow **sends a WhatsApp alert** when that happens.
 
-**Aprendizado:** quando a fonte é uma lista fixa, a chave não é "buscar mais fundo" de uma vez,
-e sim **paginar/rotacionar** o ponto de partida entre execuções.
-
----
-
-## 9. Classificação de nichos (o problema do "produto que não combina")
-
-- Mapear uma **categoria-topo** e varrer TODAS as filhas trazia itens fora do tema:
-  - **Saúde → Fit** trouxe cadeira de banho e luvas (material médico). Fix: mapear só a subcategoria
-    **Suplementos** (e as de fitness), não a Saúde inteira.
-  - **Festas → Papelaria** trouxe talheres, taças e chapéus de fantasia. Fix: Festas foi pra **Casa**
-    (mesa posta combina), e Papelaria ficou só com papelaria/livros/mídia.
-- **Bug sutil do cache:** ao editar o mapa de nichos, o **cache de categorias (7 dias) não atualizava**.
-  Fix: o cache agora guarda uma **assinatura** do mapa e se **invalida sozinho** quando o mapa muda.
-
-**Aprendizado:** categorias amplas são heterogêneas — às vezes o certo é mapear no nível de **subcategoria**.
-E todo cache precisa de uma estratégia de **invalidação**.
+**Lesson:** when there is no API, an internal endpoint + cookies works, but it is fragile.
+Isolating the part that expires (CSRF) and renewing it automatically makes it much more robust.
 
 ---
 
-## 10. Multi-nicho
+## 6. WhatsApp via Evolution API (the second boss)
 
-Regra de negócio: uma oferta pode pertencer a **mais de um grupo** (ex.: um celular 65% OFF vai pro
-grupo Tech **e** pro Imperdíveis). Implementado emitindo a oferta uma vez por nicho, com hash por `id:nicho`.
+- **"Invisible" QR code:** I had set `QRCODE_COLOR` to black on a dark background, so the QR disappeared. (Also: the QR is not returned by REST, only by the panel/websocket.)
+- **Handshake "Timed Out" / QR never generated:** outdated WhatsApp Web version in Baileys.
+  Fix: set `CONFIG_SESSION_PHONE_VERSION` to the current version (available in the Baileys repository).
+- **"SessionError: No sessions" when sending to a GROUP:** a bug with WhatsApp's new **LID** scheme
+  in the `atendai/evolution-api:2.2.3` image. **Fix: switch to `evoapicloud/evolution-api:v2.3.7`**
+  (it reconnected without a new scan and solved it). Direct messages worked; only groups failed.
 
----
-
-## 11. Consolidação de nichos (25 → 11)
-
-Começamos com 1 nicho por categoria do ML (~25). Muitos eram redundantes (mesmos produtos) ou vazios.
-Analisando as ofertas reais que caíam em cada grupo, fundimos:
-`tech` (eletrônicos+celulares+informática+games+câmeras), `casa` (+eletrodomésticos+alimentos+festas),
-`ferramentas` (+construção+agro), `fit` (fitness+suplementos), `beleza` (+joias+moda), `bebes` (+brinquedos),
-`papelaria` (+livros+mídia). Resultado: **11 nichos** enxutos.
-
-**Aprendizado:** deixe os **dados reais** guiarem a taxonomia; granularidade demais dilui a audiência.
+**Lesson:** unofficial WhatsApp (Baileys) is version-sensitive. When "everything works except groups",
+suspect the **image/protocol version (LID)**.
 
 ---
 
-## 12. Identidade visual
+## 7. Dedup: from fragile to robust
 
-- Logos gerados com **Pillow** em container Python (sem depender de nada instalado).
-- Mascote capivara → depois um **jogo de ícones temáticos** por nicho (recortados de uma imagem e **centralizados** detectando o conteúdo não-branco).
-- Fotos aplicadas nos grupos (Evolution) e canais via API.
+- The first version used n8n's `staticData`. Problem: **manual executions do not persist** staticData,
+  so deals repeated during testing.
+- Solution: **dedup in Postgres** (`INSERT ... ON CONFLICT (hash_dedup) DO NOTHING RETURNING`),
+  which is atomic and always persists. Hash = `source:id:niche`.
 
----
-
-## 13. Anti-ban / boas práticas de WhatsApp
-
-- Número pessoal = **risco de ban**. Mitigações: **"só admin posta"** (announcement) nos grupos,
-  **throttle de 30s** entre envios (evita rajada — o pior sinal de spam), mensagens expirando em **90 dias** (nativo).
-- Recomendação forte para escala: **chip dedicado**.
-
-**Aprendizado:** o que mais queima número é **rajada** e **volume diário**; espaçar + limitar é essencial.
+**Lesson:** state that must survive between runs belongs in the **database**, not in staticData.
 
 ---
 
-## 14. Remoção do Telegram
+## 8. Volume and the rotating cursor (the key insight)
 
-Depois de validar, o foco virou 100% WhatsApp. Removemos os nós do Telegram e **migramos os alertas**
-(cookie expirado) para uma mensagem no **próprio WhatsApp** do admin (via Evolution) — zero dependência do Telegram.
+- Symptom: "few new deals". Cause: `highlights` always returns the **same ~20 best sellers**
+  per category (it caps at ~20 and ignores a higher `limit`). Every run started from the same point, so dedup blocked everything.
+- Solution: a **rotating cursor**. Map ALL subcategories (cached), and on each run scan a different
+  **window**, advancing a cursor. That way the whole catalog gets explored over time.
 
----
-
-## 15. Shopee (pausado)
-
-Virou afiliado Shopee, mas a **Open API dos Afiliados exige acesso aprovado** (não liberado ainda).
-Sem ela: não dá pra pegar ofertas nem gerar links de forma confiável (scraping é bloqueado). Fica
-pausado até aprovar — e aí a integração é limpa (a API oficial já devolve o link de afiliado pronto).
+**Lesson:** when the source is a fixed list, the key is not "digging deeper" at once,
+but **paginating/rotating** the starting point between runs.
 
 ---
 
-## 16. Lições gerais
+## 9. Niche classification (the "product that doesn't fit" problem)
 
-- **Diagnostique com dados** (logs, event viewer, respostas da API) antes de agir.
-- **Valide o caminho barato primeiro** (Telegram antes do WhatsApp).
-- **Estado durável → banco**, não cache volátil; e **todo cache precisa invalidar**.
-- APIs mudam/bloqueiam: tenha **plano B** (endpoint interno, versão de imagem, rotação).
-- Em automação de mensagens, **anti-flood e anti-ban** são requisito, não enfeite.
-- **Deixe os dados guiarem o produto** (taxonomia de nichos, threshold de desconto).
+- Mapping a **top-level category** and scanning ALL of its children brought off-topic items:
+  - **Health → Fit** brought shower chairs and gloves (medical supplies). Fix: map only the
+    **Supplements** subcategory (and the fitness ones), not all of Health.
+  - **Parties → Stationery** brought cutlery, glasses and costume hats. Fix: Parties moved to **Home**
+    (table settings fit there), and Stationery kept only stationery/books/media.
+- **Subtle cache bug:** after editing the niche map, the **category cache (7 days) did not update**.
+  Fix: the cache now stores a **signature** of the map and **invalidates itself** when the map changes.
+
+**Lesson:** broad categories are heterogeneous; sometimes the right move is to map at the **subcategory** level.
+And every cache needs an **invalidation** strategy.
 
 ---
 
-*Construído com muita paciência, muitos reboots e um pouco de capivara.*
+## 10. Multi-niche
+
+Business rule: a deal can belong to **more than one group** (for example, a phone at 65% off goes to the
+Tech group **and** to Unmissable). Implemented by emitting the deal once per niche, with a hash per `id:niche`.
+
+---
+
+## 11. Consolidating niches (25 → 11)
+
+I started with one niche per Mercado Livre category (~25). Many were redundant (same products) or empty.
+Looking at the real deals landing in each group, I merged them:
+`tech` (electronics+phones+computers+games+cameras), `casa` (+appliances+food+parties),
+`ferramentas` (+construction+agro), `fit` (fitness+supplements), `beleza` (+jewelry+fashion), `bebes` (+toys),
+`papelaria` (+books+media). Result: **11 lean niches**.
+
+**Lesson:** let **real data** drive the taxonomy; too much granularity dilutes the audience.
+
+---
+
+## 12. Visual identity
+
+- Logos generated with **Pillow** inside a Python container (no local dependencies).
+- A capybara mascot → later a **set of themed icons** per niche (cut from one image and **centered** by detecting the non-white content).
+- Pictures applied to the groups (Evolution) and channels through the API.
+
+---
+
+## 13. Anti-ban / WhatsApp best practices
+
+- Personal number = **ban risk**. Mitigations: **admin-only posting** (announcement mode) in the groups,
+  a **30s throttle** between messages (bursts are the worst spam signal), and messages that expire after **90 days** (native feature).
+- Strong recommendation for scale: a **dedicated SIM**.
+
+**Lesson:** what burns a number fastest is **bursts** and **daily volume**; spacing and limiting are essential.
+
+---
+
+## 14. Removing Telegram
+
+After validation, the focus became 100% WhatsApp. I removed the Telegram nodes and **moved the alerts**
+(expired cookie) to a message on the admin's **own WhatsApp** (via Evolution), with zero dependency on Telegram.
+
+---
+
+## 15. Shopee (paused)
+
+I became a Shopee affiliate, but the **Affiliate Open API requires approved access** (not granted yet).
+Without it, there is no reliable way to get deals or generate links (scraping is blocked). It stays
+paused until approval, and then the integration is clean (the official API already returns the affiliate link).
+
+---
+
+## 16. General lessons
+
+- **Diagnose with data** (logs, event viewer, API responses) before acting.
+- **Validate the cheap path first** (Telegram before WhatsApp).
+- **Durable state → database**, not a volatile cache; and **every cache needs invalidation**.
+- APIs change and get blocked: have a **plan B** (internal endpoint, image version, rotation).
+- In messaging automation, **anti-flood and anti-ban** are requirements, not extras.
+- **Let data drive the product** (niche taxonomy, discount threshold).
+
+---
+
+*Built with a lot of patience, a lot of reboots and a bit of capybara.*
